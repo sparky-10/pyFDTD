@@ -42,8 +42,9 @@ if USE_MATPLOTLIB:
     from matplotlib.colors import LinearSegmentedColormap
             
 # TODO
+
 # Make GIF
-# - 1D
+# - Do 1D
 # Test 1D and 3D
 # - Sim
 # - 1D no negative component??
@@ -51,7 +52,6 @@ if USE_MATPLOTLIB:
 # Plots:
 # - Add src/recs
 # - Add optional plotSliceHeight for 3D
-# - Mesh on 1D plot
 # Add proper examples
 # Do proper readme
 # Add more debug text?
@@ -392,7 +392,6 @@ class pyFDTD:
         # Size of space
         self.NDim = len(self.Nxyz)
         self.D = [(N-1)*self.X for N in self.Nxyz]
-        
         # Total problem size
         self.Ntot = np.prod(self.Nxyz)
         
@@ -861,7 +860,8 @@ class pyFDTD:
         # Update on debug
         self.printToDebug('meshReset')
             
-        self.mesh = np.zeros((self.Nxyz), dtype=int)
+        #self.mesh = np.zeros((self.Nxyz), dtype=int)
+        self.mesh = np.zeros((self.Nxyz))
         if doPrepareMesh:
             self.prepareMesh()
         
@@ -1286,15 +1286,6 @@ class pyFDTD:
             # Convert to correct format using colour map
             img = self.arr2CMap(img, self.cLims, self.cMap)
             
-            # # TODO - delete
-            # cRange = self.cLims[1]-self.cLims[0]
-            # img = (img-self.cLims[0])*1/cRange      # Scale
-            # img = np.clip(img,0,1)                  # Clip
-            # img = self.cMap(img)                    # Apply colour map
-            # img *= 255                              # Scale to 255
-            # img = img.astype(np.uint8)              # As uint8 data
-            # img = np.flipud(img)                    # Flip to make right way up
-            
             # If there is a mask (surfaces) to add then combine
             if self.showMask:
                 for i in range(0,3):
@@ -1310,7 +1301,9 @@ class pyFDTD:
         # Get mesh slice for plottng
         if self.mesh is None or not self.showMask:
             self.meshSlice = np.zeros(self.Nxyz, dtype=np.uint8)
-        elif self.NDim <= 2:
+        elif self.NDim == 1:
+            self.meshSlice = self.mesh.reshape([1,len(self.mesh)])
+        elif self.NDim == 2:
             self.meshSlice = self.mesh
         elif self.NDim == 3:
             self.meshSlice = self.mesh[:,:,self.plotSliceNum]
@@ -1325,6 +1318,10 @@ class pyFDTD:
         
         # Update on debug
         self.printToDebug('makePlot')
+        
+        # Slice to plot if 3D
+        try: self.plotSliceNum = self.srcInd[0][-1]
+        except: self.plotSliceNum = 0
         
         # If plotting mesh
         if self.showMask and \
@@ -1351,18 +1348,27 @@ class pyFDTD:
                 #plt.ion()
                 self.hf, self.ax = plt.subplots()
                 self.figNum = self.hf.number
+                
+            # Plot range
+            if self.NDim == 1:
+                extent = [-self.X*0.5, self.D[0]+self.X*0.5]+self.cLims
+                aspect = 'auto'
+            else:
+                extent = [-self.X*0.5, self.D[1]+self.X*0.5, \
+                          -self.X*0.5, self.D[0]+self.X*0.5]
+                aspect = 'equal'
             
             # Main p plot
             if self.NDim == 3:
-                try: self.plotSliceNum = self.srcInd[0][-1]
-                except: self.plotSliceNum = 0
                 # Plot slice
                 self.hPlot = self.ax.imshow(self.p[:,:,self.plotSliceNum], \
-                   extent=[0.0, self.D[1], 0.0, self.D[0]], \
+                   extent=extent, \
                    vmin=self.cLims[0], vmax=self.cLims[1], \
                    cmap=self.cMap, \
                    aspect='equal', \
                    origin='lower')
+                self.ax.set_xlim([0, self.D[1]])
+                self.ax.set_ylim([0, self.D[0]])
             elif self.NDim == 2:
                 # Plot all
                 self.hPlot = self.ax.imshow(self.p, \
@@ -1371,10 +1377,13 @@ class pyFDTD:
                    cmap=self.cMap, \
                    aspect='equal', \
                    origin='lower')
+                self.ax.set_xlim([0, self.D[1]])
+                self.ax.set_ylim([0, self.D[0]])
             elif self.NDim == 1:
-                xx = np.linspace(0.0, self.D[0], self.Nxyz[0], endpoint=False)
+                xx = np.linspace(0.0, self.D[0], self.Nxyz[0], endpoint=True)
                 self.hPlot, = self.ax.plot(xx,self.p)   # Note comma as returns tuple
                 self.ax.grid()
+                self.ax.set_xlim([0, self.D[0]])
                 self.ax.set_ylim(self.cLims)
             else:
                 # Invalid NDim
@@ -1396,18 +1405,14 @@ class pyFDTD:
             
             # If plotting mesh
             if self.showMask:
-                if self.NDim > 1:
-                    # Plot
-                    self.hPlotMask = self.ax.imshow(self.meshSlice, \
-                        extent=[0.0, self.D[1], 0.0, self.D[0]], \
-                        vmin=0, vmax=1, \
-                        cmap=self.gMap, \
-                        interpolation='none', \
-                        aspect='equal', \
-                        origin='lower')
-                else:
-                    # TODO - how to plot mesh for 1D???
-                    ()
+                # Plot
+                self.hPlotMask = self.ax.imshow(self.meshSlice, \
+                    extent=extent, \
+                    vmin=0, vmax=1, \
+                    cmap=self.gMap, \
+                    interpolation='none', \
+                    aspect=aspect, \
+                    origin='lower')
             
             # Draw
             self.hf.show()

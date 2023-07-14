@@ -45,12 +45,13 @@ if USE_MATPLOTLIB:
 
 # Make GIF
 # - Do 1D
+# - Add src/recs??
 # Test 1D and 3D
 # - Sim
 # - 1D no negative component??
 # - Mesh creating
 # Plots:
-# - Add src/recs
+# - Add src/rec labels
 # - Add optional plotSliceHeight for 3D
 # Add proper examples
 # Do proper readme
@@ -130,9 +131,11 @@ class pyFDTD:
         self.dc                 = 0
         
         self.imageThreshold     = 0
-        self.showMask           = True
-        self.maskColInvert      = False
-        self.showColBar         = True
+        self.plotShowMask       = True
+        self.plotMaskColInvert  = False
+        self.plotShowColBar     = True
+        self.plotShowSrc        = True
+        self.plotShowRec        = True
         self.image              = None
         self.mesh               = None
         
@@ -1259,7 +1262,7 @@ class pyFDTD:
         if self.saveGif and (self.updatePlotThisLoop or frame0):
             
             # If there is a mask (surfaces) to get on first frame
-            if self.showMask and frame0:
+            if self.plotShowMask and frame0:
                 if self.NDim > 1:
                     # Convert to correct format using colour map
                     self.imgMesh = self.arr2CMap(self.meshSlice, \
@@ -1287,7 +1290,7 @@ class pyFDTD:
             img = self.arr2CMap(img, self.cLims, self.cMap)
             
             # If there is a mask (surfaces) to add then combine
-            if self.showMask:
+            if self.plotShowMask:
                 for i in range(0,3):
                     img[:,:,i] = np.where(self.mesh>0, \
                                           self.imgMesh[:,:,i], \
@@ -1299,7 +1302,7 @@ class pyFDTD:
     def getMeshSlice(self):
         
         # Get mesh slice for plottng
-        if self.mesh is None or not self.showMask:
+        if self.mesh is None or not self.plotShowMask:
             self.meshSlice = np.zeros(self.Nxyz, dtype=np.uint8)
         elif self.NDim == 1:
             self.meshSlice = self.mesh.reshape([1,len(self.mesh)])
@@ -1324,14 +1327,14 @@ class pyFDTD:
         except: self.plotSliceNum = 0
         
         # If plotting mesh
-        if self.showMask and \
+        if self.plotShowMask and \
             ( (self.doPlot and USE_MATPLOTLIB) or \
             (self.saveGif) ):
             # Mask
             self.getMeshSlice()
             # Colour map
             gMap = 'gray'
-            if not self.maskColInvert:
+            if not self.plotMaskColInvert:
                 gMap += '_r'
             self.gMap = plt.get_cmap(gMap)
         
@@ -1399,12 +1402,12 @@ class pyFDTD:
             # self.hPlot.set_origin='lower'
             
             # If plotting colour bar
-            if self.showColBar:
+            if self.plotShowColBar:
                 if self.NDim > 1:
                     self.colBar = plt.colorbar(self.hPlot)
             
             # If plotting mesh
-            if self.showMask:
+            if self.plotShowMask:
                 # Plot
                 self.hPlotMask = self.ax.imshow(self.meshSlice, \
                     extent=extent, \
@@ -1414,6 +1417,54 @@ class pyFDTD:
                     aspect=aspect, \
                     origin='lower')
             
+            # If plotting sources
+            if self.plotShowSrc:
+                if self.NDim == 1:
+                    xx = np.array(self.srcXyz)[:,0]
+                    yy = np.zeros(len(xx))
+                    onSlice = np.full(len(xx),True)
+                else:
+                    xx = np.array(self.srcXyz)[:,1]
+                    yy = np.array(self.srcXyz)[:,0]
+                    if self.NDim == 2:
+                        onSlice = np.full(len(xx),True)
+                    else:
+                        zInd = np.array(self.srcInd)[:,2]
+                        onSlice = self.plotSliceNum==zInd
+                # Colours
+                col1 = (0.3,0.3,0.4,1)
+                col2 = (0.8,0.8,0.8,1)
+                cols = [col1]*len(xx)
+                for i in range(len(xx)):
+                    if not onSlice[i]:
+                        cols[i] = col2
+                # Plot
+                self.hPlotSrc = self.ax.scatter(xx, yy, c=cols, marker="o")
+            
+            # If plotting receivers
+            if self.plotShowRec:
+                if self.NDim == 1:
+                    xx = np.array(self.recXyz)[:,0]
+                    yy = np.zeros(len(xx))
+                    onSlice = np.full(len(xx),True)
+                else:
+                    xx = np.array(self.recXyz)[:,1]
+                    yy = np.array(self.recXyz)[:,0]
+                    if self.NDim == 2:
+                        onSlice = np.full(len(xx),True)
+                    else:
+                        zInd = np.array(self.recInd)[:,2]
+                        onSlice = self.plotSliceNum==zInd
+                # Colours
+                col1 = (0.4,0.3,0.3,1)
+                col2 = (0.8,0.8,0.8,1)
+                cols = [col1]*len(xx)
+                for i in range(len(xx)):
+                    if not onSlice[i]:
+                        cols[i] = col2
+                # Plot
+                self.hPlotRec = self.ax.scatter(xx, yy, c=cols, marker="x")
+                
             # Draw
             self.hf.show()
             #plt.show()
@@ -1462,7 +1513,7 @@ class pyFDTD:
     def updatePlotMask(self):
         
         # Update plot mask
-        if self.doPlot and USE_MATPLOTLIB and self.showMask:
+        if self.doPlot and USE_MATPLOTLIB and self.plotShowMask:
             if self.plotExist():
                 self.getMeshSlice()
                 self.hPlotMask.set_data(self.meshSlice)

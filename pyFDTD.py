@@ -606,7 +606,7 @@ class pyFDTD:
             # Surface node indices
             self.psn1 = np.where(diff1==1)[0]
             self.psn2 = np.where(diff2==1)[0]
-    
+            
             # 'Opposite' node indices
             self.pon1 = self.psn1-1
             self.pon2 = self.psn2+1
@@ -626,8 +626,19 @@ class pyFDTD:
             isLastIndex = np.remainder(self.psn2,Ni[-1])==0
             
             # Default to beta on border
-            beta1 = np.ones(len(pgn1))*self.betaBorder
-            beta2 = np.ones(len(pgn2))*self.betaBorder
+            if hasattr(self.betaBorder, "__len__"):
+                i1 = (dims[-1]*2)%len(self.betaBorder)
+                i2 = (dims[-1]*2+1)%len(self.betaBorder)
+                # Note switch in i1 and i2 as my 1s and 2s were defined the
+                # other way round when I first wrote this
+                betaBorder1 = self.betaBorder[i2]
+                betaBorder2 = self.betaBorder[i1]
+            else:
+                betaBorder1 = self.betaBorder
+                betaBorder2 = self.betaBorder
+            beta1 = np.ones(len(pgn1))*betaBorder1
+            beta2 = np.ones(len(pgn2))*betaBorder2
+            
             # And then if not on border...
             if betaMode == 'constant':
                 beta1[isFirstIndex==False] = self.beta

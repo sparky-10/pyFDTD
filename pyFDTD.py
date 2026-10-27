@@ -112,6 +112,8 @@ class pyFDTD:
         self.plotUpdateTime     = PLOT_UPDATE_TIME
         self.plotIthUpdate      = PLOT_ITH_UPDATE
         
+        self.srcModel           = "soft"
+        
         self.saveRecData        = False
         self.recDataFile        = 'recData.wav'
         self.fsOut              = None
@@ -307,8 +309,15 @@ class pyFDTD:
         
         # Add source pressure
         for j in range(0,self.srcN):
-            self.p.flat[self.srcFlatInd[j]] += \
-                self.srcStrength[j] * self.srcData[j][i]
+            if self.srcModel == "hard":
+                self.p.flat[self.srcFlatInd[j]] = self.srcStrength[j] * self.srcData[j][i]
+            elif self.srcModel == "soft":
+                self.p.flat[self.srcFlatInd[j]] += self.srcStrength[j] * self.srcData[j][i]
+            elif self.srcModel == "transparent":
+                self.p.flat[self.srcFlatInd[j]] += self.srcData[j][i]
+                if i >= 2:
+                    # This isn't perfect, but works for standard leapfrog schemes
+                    self.p.flat[self.srcFlatInd[j]] += self.srcTranspAdjust * self.srcStrength[j] * self.srcData[j][i-2]
         
         # Store receiver pressure
         for j in range(0,self.recN):
@@ -406,6 +415,9 @@ class pyFDTD:
         # Number time steps
         self.Nt = int(np.ceil(self.t/self.T))
         
+        # Set according to source model
+        self.setSrcModel()
+        
         # check coordinates of source/receivers
         if self.doSrcRecCoordsCheck:
             self.checkSrcRecCoords()
@@ -458,6 +470,14 @@ class pyFDTD:
             self.a.flat[np.arange(15,26,2)] = self.d2
             self.a.flat[np.array([0,2,6,8,18,20,24,26])] = self.d3
             self.a[1,1,1] = self.d4
+    
+    def setSrcModel(self):
+        
+        # Get source dependent model values
+        if self.srcModel == "transparent":
+            self.srcTranspAdjust = 1-np.sum(self.a.ravel()**2)  # TODO!!!!!!!!!!!!!!!!!!!!!!!!!
+        else:
+            self.srcTranspAdjust = 0 
     
     def checkSrcRecCoords(self):
         

@@ -48,7 +48,7 @@ elif fdtd.NDim == 2:
     # Load a 2D image
     fdtd.betaMode = 'varying'
     fdtd.betaBorder = 1
-    # fdtd.loadImage('../images/Flat_wall.png')
+    # fdtd.loadImage('images/Flat_wall.png')
     fdtd.loadImage('images/Binary_amplitude_diffuser.png')
     fdtd.moveSrc([1.25, 1.25])
     fdtd.moveRec([1.25, 1.75])

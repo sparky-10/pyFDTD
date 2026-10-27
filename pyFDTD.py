@@ -1039,33 +1039,71 @@ class pyFDTD:
         # inds[0] = self.Nxyz[0]-inds[0]-1
         return inds
         
-    def addSrc(self, xyz, tOffset=0.0, f0=None, srcType=None):
+    def addSrc(self, xyz, tOffset=0.0, f0=None, srcType=None, Amp=1.0):
         
         # Update on debug
         self.printToDebug('addSrc')
         
         # Add a source
         if self.checkCoords(xyz):
-            self.srcXyz.insert(self.srcN, xyz)
-            inds = self.getInds(xyz)
-            self.srcInd.insert(self.srcN, inds)
-            self.srcFlatInd.insert(self.srcN, \
-                                   np.ravel_multi_index(inds, self.Nxyz))
-            self.srcXyzDisc.insert(self.srcN, \
-                                   [ind*self.X for ind in self.srcInd[self.srcN]])
-            self.srcType.insert(self.srcN, srcType)
-            srcData, tOffset, f0, srcType = self.getSrc(tOffset=tOffset,
-                                                        f0=f0, 
-                                                        srcType=srcType, 
-                                                        i=self.srcN)
-            self.srcData.insert(self.srcN, srcData)
-            self.srcT0.insert(self.srcN, tOffset)
-            self.srcFreq.insert(self.srcN, f0)
-            self.srcAmp.insert(self.srcN, 1.0)
-            self.srcType.insert(self.srcN, srcType)
-            self.srcStrength.insert(self.srcN, 1.0)
-            self.srcNodeType.insert(self.srcN, 0)
+            # Add new empty entries
+            self.srcXyz.insert(self.srcN, None)
+            self.srcInd.insert(self.srcN, None)
+            self.srcFlatInd.insert(self.srcN, None)
+            self.srcXyzDisc.insert(self.srcN, None)
+            self.srcData.insert(self.srcN, None)
+            self.srcT0.insert(self.srcN, None)
+            self.srcFreq.insert(self.srcN, None)
+            self.srcAmp.insert(self.srcN, None)
+            self.srcType.insert(self.srcN, None)
+            self.srcStrength.insert(self.srcN, None)
+            self.srcNodeType.insert(self.srcN, None)
+            # Fill with new source values
+            self.editSrc(xyz=xyz, tOffset=tOffset, f0=f0, srcType=srcType, Amp=Amp, i=self.srcN)
+            # We now have one more source
             self.srcN += 1
+    
+    def editSrc(self, xyz=None, tOffset=0.0, f0=None, srcType=None, Amp=1.0, i=-1):
+    
+        # Update on debug
+        self.printToDebug('editSrc')
+        
+        # If no passed input, get existing
+        if xyz is None:
+            xyz = self.srcXyz[i]
+        if tOffset is None:
+            tOffset = self.srcT0[i]
+        if f0 is None:
+            f0 = self.srcFreq[i]
+        if srcType is None:
+            srcType = self.srcType[i]
+        if Amp is None:
+            Amp = self.srcAmp[i]
+        
+        # Is source location valid??
+        validSrc = self.checkCoords(xyz)
+        
+        # If valid position, edit source
+        if validSrc:
+            self.srcXyz[i] = xyz
+            inds = self.getInds(xyz)
+            self.srcInd[i] = inds
+            self.srcFlatInd[i] = np.ravel_multi_index(inds, self.Nxyz)
+            self.srcXyzDisc[i] = [ind*self.X for ind in self.srcInd[i]]
+            srcData, tOffset, f0, srcType, Amp, = self.getSrc(tOffset=tOffset,
+                                                        f0=f0, 
+                                                        srcType=srcType,
+                                                        Amp=Amp,
+                                                        i=i)
+            self.srcData[i] = srcData
+            self.srcT0[i] = tOffset
+            self.srcFreq[i] = f0
+            self.srcAmp[i] = Amp
+            self.srcType[i] = srcType
+            self.srcStrength[i] = 1.0
+            self.srcNodeType[i] = 0
+        
+        return validSrc
         
     def moveSrc(self, xyz, i=-1):
         
@@ -1073,14 +1111,7 @@ class pyFDTD:
         self.printToDebug('moveSrc')
         
         # Move source to position
-        validMove = self.checkCoords(xyz)
-        if validMove:
-            self.srcXyz[i] = xyz
-            self.srcInd[i] = self.getInds(xyz)
-            self.srcFlatInd[i] = np.ravel_multi_index(self.srcInd[i], self.Nxyz)
-            self.srcXyzDisc[i] = [ind*self.X for ind in self.srcInd[i]]
-        
-        return validMove
+        return self.editSrc(xyz=xyz, i=i)
     
     def delSrc(self, i=-1):
         
@@ -1101,39 +1132,57 @@ class pyFDTD:
         self.srcNodeType.pop(i)
         self.srcN -= 1
         
-    def addRec(self, xyz):
+    def addRec(self, xyz, Amp=1.0):
         
         # Update on debug
         self.printToDebug('addRec')
-            
+        
         # Add a receiver
         if self.checkCoords(xyz):
-            self.recXyz.insert(self.recN, xyz)
-            inds = self.getInds(xyz)
-            self.recInd.insert(self.recN, inds)
-            self.recFlatInd.insert(self.recN, \
-                                   np.ravel_multi_index(inds, self.Nxyz))
-            self.recXyzDisc.insert(self.recN, \
-                                   [ind*self.X for ind in self.recInd[self.recN]])
-            self.recData.insert(self.recN, np.zeros(self.Nt))
-            self.recAmp.insert(self.srcN, 1.0)
-            self.recStrength.insert(self.srcN, 1.0)
-            self.recNodeType.insert(self.recN, 0)
+            self.recXyz.insert(self.recN, None)
+            self.recInd.insert(self.recN, None)
+            self.recFlatInd.insert(self.recN, None)
+            self.recXyzDisc.insert(self.recN, None)
+            self.recData.insert(self.recN, None)
+            self.recAmp.insert(self.recN, None)
+            self.recStrength.insert(self.recN, None)
+            self.recNodeType.insert(self.recN, None)
+            # Fill with new source values
+            self.editRec(xyz=xyz, Amp=Amp, i=self.recN)
+            # We now have one more receiver
             self.recN += 1
+    
+    def editRec(self, xyz, Amp=1.0, i=-1):
+        
+        # Update on debug
+        self.printToDebug('editRec')
+        
+        # If no passed input, get existing
+        if xyz is None:
+            xyz = self.recXyz[i]
+        if Amp is None:
+            Amp = self.recAmp[i]
+        
+        # Is receiver location valid??
+        validRec = self.checkCoords(xyz)
+        if validRec:
+            self.recXyz[i] = xyz
+            inds = self.getInds(xyz)
+            self.recInd[i] = inds
+            self.recFlatInd[i] = np.ravel_multi_index(inds, self.Nxyz)
+            self.recXyzDisc[i] = [ind*self.X for ind in self.srcInd[i]]
+            self.recData[i] = np.zeros(self.Nt)
+            self.recAmp[i] = Amp
+            self.recStrength[i] = 1.0
+            self.recNodeType[i] = 0
     
     def moveRec(self, xyz, i=-1):
         
         # Update on debug
         self.printToDebug('moveRec')
             
-        # Move source to position
-        validMove = self.checkCoords(xyz)
-        if validMove:
-            self.recXyz[i] = xyz
-            self.recInd[i] = self.getInds(xyz)
-            self.recFlatInd[i] = np.ravel_multi_index(self.recInd[i], self.Nxyz)
-            self.recXyzDisc[i] = [ind*self.X for ind in self.recInd[i]]
-        return validMove
+        # Move receiver to position
+        return self.editRec(xyz=xyz, i=i)
     
     def delRec(self, i=-1):
         
@@ -1151,7 +1200,7 @@ class pyFDTD:
         self.recNodeType.pop(i)
         self.recN -= 1
         
-    def getSrc(self, tOffset=0.0, f0=None, srcType=None, i=-1):
+    def getSrc(self, tOffset=0.0, f0=None, srcType=None, Amp=None, i=-1):
         
         # Centre frequency
         if f0 is None:
@@ -1233,15 +1282,15 @@ class pyFDTD:
                 # Constant tone
                 src_fcn = np.sin(2*PI*f0*t)
         
-        return src_fcn, tOffset, f0, srcType
+        return src_fcn, tOffset, f0, srcType, Amp
     
     def srcRecDataReset(self):
         
         # Reset all src/rec data
         for i in range(0,self.srcN):
-            self.srcData[i], self.srcT0[i], self.srcFreq[i], self.srcType[i] =\
+            self.srcData[i], self.srcT0[i], self.srcFreq[i], self.srcType[i], self.srcAmp[i] =\
                 self.getSrc(tOffset=self.srcT0[i], f0=self.srcFreq[i], \
-                            srcType=self.srcType[i], i=i)
+                            srcType=self.srcType[i], Amp=self.srcAmp[i], i=i)
         for i in range(0,self.recN):
             self.recData[i] = np.zeros(self.Nt)
     

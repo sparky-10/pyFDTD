@@ -41,17 +41,13 @@ else:
 if USE_MATPLOTLIB:
     import matplotlib.pyplot as plt
     from matplotlib.colors import LinearSegmentedColormap
-            
+
 # TODO
 
 # GIF
 # - Test 3D vertical orientation
 # - Do 1D
 # - Add src/recs??
-# Test 1D and 3D
-# - Sim
-# - 1D no negative component??
-# - Mesh creating
 # Plots:
 # - Add src/rec labels
 # - Add optional plotSliceHeight for 3D
@@ -313,10 +309,10 @@ class pyFDTD:
                 self.p.flat[self.srcFlatInd[j]] = self.srcStrength[j] * self.srcData[j][i]
             elif self.srcModel == "soft":
                 self.p.flat[self.srcFlatInd[j]] += self.srcStrength[j] * self.srcData[j][i]
-            elif self.srcModel == "transparent":
+            elif self.srcModel == "transparent 1D":
                 self.p.flat[self.srcFlatInd[j]] += self.srcData[j][i]
                 if i >= 2:
-                    # This isn't perfect, but works for standard leapfrog schemes
+                    # This isn't great, but works for 1D standard leapfrog schemes
                     self.p.flat[self.srcFlatInd[j]] += self.srcTranspAdjust * self.srcStrength[j] * self.srcData[j][i-2]
         
         # Store receiver pressure
@@ -428,6 +424,8 @@ class pyFDTD:
     def courantNo(self):
         
         # Define Courant No.
+        # Note: uses standard leapfrog scheme (da = db = dc = 0)
+        # Any other values will likely not work for surface reflections
         self.lam2 = [1-4*self.da, (1-8*self.da+16*self.da**2)/(2-4*self.db), \
             (1-12*self.da+48*self.da**2-64*self.da**3)/ \
                 (3-12*self.db+16*self.dc)]
@@ -451,7 +449,9 @@ class pyFDTD:
     
     def getConvMat(self):
         
-        # Make convolutin matrix
+        # Make convolution matrix
+        # Note: convolution means effectively flip of this is used, but...
+        # doesn't matter if symmetric
         if self.NDim == 1:
             self.a = np.zeros((3))
             self.a[[0,2]] = self.d1
@@ -473,11 +473,13 @@ class pyFDTD:
     
     def setSrcModel(self):
         
-        # Get source dependent model values
-        if self.srcModel == "transparent":
-            self.srcTranspAdjust = 1-np.sum(self.a.ravel()**2)  # TODO!!!!!!!!!!!!!!!!!!!!!!!!!
-        else:
-            self.srcTranspAdjust = 0 
+        # Get any source dependent model values
+        self.srcTranspAdjust = 0
+        if self.srcModel == "transparent 1D":
+            # Note: This is a basic 'single tap' compensation for the source function and only
+            # properly works for 1D. More generally, proper transparent sources require pre-computation
+            # of the grid impulse response.
+            self.srcTranspAdjust = 1-np.sum(self.a.ravel()**2)
     
     def checkSrcRecCoords(self):
         
@@ -1100,16 +1102,11 @@ class pyFDTD:
         if Amp is None:
             Amp = self.srcAmp[i]
         
-        # Is source location valid??
-        validSrc = self.checkCoords(xyz)
+        # Attempt to move source
+        validSrc = self.moveSrc(xyz, i=i)
         
-        # If valid position, edit source
+        # If valid position, edit rest of source properties
         if validSrc:
-            self.srcXyz[i] = xyz
-            inds = self.getInds(xyz)
-            self.srcInd[i] = inds
-            self.srcFlatInd[i] = np.ravel_multi_index(inds, self.Nxyz)
-            self.srcXyzDisc[i] = [ind*self.X for ind in self.srcInd[i]]
             srcData, tOffset, f0, srcType, Amp, = self.getSrc(tOffset=tOffset,
                                                         f0=f0, 
                                                         srcType=srcType,
@@ -1118,8 +1115,8 @@ class pyFDTD:
             self.srcData[i] = srcData
             self.srcT0[i] = tOffset
             self.srcFreq[i] = f0
-            self.srcAmp[i] = Amp
             self.srcType[i] = srcType
+            self.srcAmp[i] = Amp
             self.srcStrength[i] = 1.0
             self.srcNodeType[i] = 0
         
@@ -1131,8 +1128,21 @@ class pyFDTD:
         self.printToDebug('moveSrc')
         
         # Move source to position
-        return self.editSrc(xyz=xyz, i=i)
+        validMove = self.checkCoords(xyz)
+        if validMove:
+            self.srcXyz[i] = xyz
+            self.srcInd[i] = self.getInds(xyz)
+            self.srcFlatInd[i] = np.ravel_multi_index(self.srcInd[i], self.Nxyz)
+            self.srcXyzDisc[i] = [ind*self.X for ind in self.srcInd[i]]
+        
+        return validMove
     
+    def refreshSrc(self, i=-1):
+        
+        # Refresh source data
+        self.editSrc(xyz=self.srcXyz[i], tOffset=self.srcT0[i], f0=self.srcFreq[i], \
+                        srcType=self.srcType[i], Amp=self.srcAmp[i], i=i)
+        
     def delSrc(self, i=-1):
         
         # Update on debug
@@ -1183,27 +1193,37 @@ class pyFDTD:
         if Amp is None:
             Amp = self.recAmp[i]
         
-        # Is receiver location valid??
-        validRec = self.checkCoords(xyz)
+        # Attempt to move receiver
+        validRec = self.moveRec(xyz, i=i)
+        
+        # If valid position, edit rest of receiver properties
         if validRec:
-            self.recXyz[i] = xyz
-            inds = self.getInds(xyz)
-            self.recInd[i] = inds
-            self.recFlatInd[i] = np.ravel_multi_index(inds, self.Nxyz)
-            self.recXyzDisc[i] = [ind*self.X for ind in self.srcInd[i]]
             self.recData[i] = np.zeros(self.Nt)
             self.recAmp[i] = Amp
             self.recStrength[i] = 1.0
             self.recNodeType[i] = 0
+        
+        return validRec
     
     def moveRec(self, xyz, i=-1):
         
         # Update on debug
         self.printToDebug('moveRec')
             
-        # Move receiver to position
-        return self.editRec(xyz=xyz, i=i)
+        # Move source to position
+        validMove = self.checkCoords(xyz)
+        if validMove:
+            self.recXyz[i] = xyz
+            self.recInd[i] = self.getInds(xyz)
+            self.recFlatInd[i] = np.ravel_multi_index(self.recInd[i], self.Nxyz)
+            self.recXyzDisc[i] = [ind*self.X for ind in self.recInd[i]]
+        return validMove
     
+    def refreshRec(self, i=-1):
+        
+        # Refresh receiver data
+        self.editRec(xyz=self.recXyz[i], Amp=self.recAmp[i], i=i)
+                        
     def delRec(self, i=-1):
         
         # Update on debug
@@ -1306,13 +1326,14 @@ class pyFDTD:
     
     def srcRecDataReset(self):
         
+        # Update on debug
+        self.printToDebug('srcRecDataReset')
+        
         # Reset all src/rec data
         for i in range(0,self.srcN):
-            self.srcData[i], self.srcT0[i], self.srcFreq[i], self.srcType[i], self.srcAmp[i] =\
-                self.getSrc(tOffset=self.srcT0[i], f0=self.srcFreq[i], \
-                            srcType=self.srcType[i], Amp=self.srcAmp[i], i=i)
+            self.refreshSrc(i)
         for i in range(0,self.recN):
-            self.recData[i] = np.zeros(self.Nt)
+            self.refreshRec(i)
     
     def writeRecData(self):
         
